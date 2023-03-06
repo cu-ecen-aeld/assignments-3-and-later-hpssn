@@ -1,0 +1,19 @@
+build system
+
+- download source for common packages
+- apply patches for cross compilation, arch dependent bugs, etc
+- build components
+- assemble rootfs in staging area
+- add your own packages
+
+buildroot
+
+-install libncurses5-dev
+
+- packages need at least two files:
+    - config.in: KConfig code adding the package to the config menu
+    - <package_name>.mk
+- packages do not contain code, they contain instructions to get, compile and add it to the rootfs
+
+command in mk file:
+$(eval $(generic-package))

@@ -1,0 +1,91 @@
+/arch
+    - architecture specifc files
+/drivers
+    - driver files
+/fs
+    - filesystem
+/include
+    - #include form user/kernel
+/init
+    - system initialization
+/kernel
+    - core functions (schedling, locking, timers)
+/mm
+    - memory management
+/net
+    - network protocols
+    
+
+Minimal root filesystem contents
+
+- shared libraries
+- configuration files (/etc)
+- device nodes (/dev)
+- /proc and /sys pseudo filesystems
+- kernel modules (/lib/modules/[kernel version])
+
+File systems
+
+/bin - programs for all users, used at boot
+/dev - device nodes that interact with the kernel and other files
+/etc - system configuration files
+/lib - shared libraries
+/proc, /sys - proc and sysfs filesystem
+/sbin - pgrams for the system administrator, used at boot
+/var - files modified at runtime
+
+- how do we create a rootfs?
+mkdir -p bin dev etc home lib lib64 proc sbin sys tmp usr var
+mkdir -p usr/bin usr/lib usr/sbin
+mkdir -p var/log
+
+-building kernel
+make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE mrproper
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
+
+-busybox
+
+make distclean
+make defconfig
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+make CONFIG_PREFIX=/path/to/rootdir ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
+
+-- add needed shared libraries from toolchain
+
+-- theyll be copied from sysroot SYSROOT=`aarch64-none-linux-gnu-gcc -print-sysroot`
+
+aarch64-none-linux-gnu-readelf -a bin/busybox | grep "program interpreter"
+aarch64-none-linux-gnu-readelf -a bin/busybox | grep "Shared library"
+
+-- creating devices
+
+created with mkdnod (make node)
+
+mknod <name> <type> <major> <minor>
+
+null device is known major 1 minor 3
+console device is known major 5 minor 1
+
+echo "making device nodes"
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/console c 5 1
+
+-- cpio utility bundles the filesystem in a format that qemu can understand
+
+cd "$OUTDIR/rootfs"
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cipio
+gzip -f initramfs.cpio
+
+-- starting qemu
+
+echo "Booting the kernel"
+# See trick at https://superuser.com/a/1412150 to route serial port output to file
+qemu-system-aarch64 -m 256M -M virt -cpu cortex-a53 -nographic -smp 1 -kernel ${KERNEL_IMAGE} \
+        -chardev stdio,id=char0,mux=on,logfile=${OUTDIR}/serial.log,signal=off \
+        -serial chardev:char0 -mon chardev=char0\
+        -append "rdinit=/bin/sh" -initrd ${INITRD_IMAGE}
+
+to stop qemu: ctrl+a + c + q
